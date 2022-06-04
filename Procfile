@@ -1,1 +1,1 @@
-web: uvicorn backend.app:app --reload --workers 4
+web: uvicorn backend.app:app --reload --workers 4 --host=0.0.0.0 --port=${PORT:-5000}
