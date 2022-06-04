@@ -75,6 +75,12 @@ async def create_student(student: StudentModel = Body(...)):
     created_student = await db["students"].find_one({"_id": new_student.inserted_id})
     return JSONResponse(status_code=status.HTTP_201_CREATED, content=created_student)
 
+@app.get("/")
+async def home():
+    data = {
+        "text": "hi"
+    }
+    return {" this page is web service; add /docs to see the api"}
 
 @app.get(
     "/", response_description="List all students", response_model=List[StudentModel]
