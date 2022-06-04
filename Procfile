@@ -1,1 +1,1 @@
-web: uvicorn --port 5000 backend.app:app --reload
+web: uvicorn backend.app:app --reload --workers 4
