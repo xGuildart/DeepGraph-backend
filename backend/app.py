@@ -1,129 +1,89 @@
 import os
-from fastapi import FastAPI, Body, HTTPException, status
+
+from ast import For
+from typing import Optional
+from email.policy import default
+from textwrap import indent
+from unittest import skip
+from black import logging
+from fastapi import FastAPI, Body, HTTPException, status, Query, Depends, Response
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, Field, EmailStr
-from bson import ObjectId
+from fastapi.security import HTTPBearer, OAuth2PasswordBearer
 from typing import Optional, List
-import motor.motor_asyncio
+from logger.log import logging
+from odmantic import ObjectId
+
+from app.db import get_engine
+from app.models import Genz, Young
+from app.oath2 import get_current_user, User
 
 app = FastAPI()
-client = motor.motor_asyncio.AsyncIOMotorClient(os.environ["MONGODB_URL"])
-db = client.college
 
 
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+logging.info("log debug################    ")
 
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid objectid")
-        return ObjectId(v)
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
-
-
-class StudentModel(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    name: str = Field(...)
-    email: EmailStr = Field(...)
-    course: str = Field(...)
-    gpa: float = Field(..., le=4.0)
-
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
-            "example": {
-                "name": "Jane Doe",
-                "email": "jdoe@example.com",
-                "course": "Experiments, Science, and Fashion in Nanophotonics",
-                "gpa": "3.0",
-            }
-        }
-
-
-class UpdateStudentModel(BaseModel):
-    name: Optional[str]
-    email: Optional[EmailStr]
-    course: Optional[str]
-    gpa: Optional[float]
-
-    class Config:
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
-        schema_extra = {
-            "example": {
-                "name": "Jane Doe",
-                "email": "jdoe@example.com",
-                "course": "Experiments, Science, and Fashion in Nanophotonics",
-                "gpa": "3.0",
-            }
-        }
-
-
-@app.post("/", response_description="Add new student", response_model=StudentModel)
-async def create_student(student: StudentModel = Body(...)):
-    student = jsonable_encoder(student)
-    new_student = await db["students"].insert_one(student)
-    created_student = await db["students"].find_one({"_id": new_student.inserted_id})
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content=created_student)
 
 @app.get("/")
-async def home():
-    data = {
-        "text": "hi"
-    }
+async def home(current_uer: User = Depends(get_current_user)):
+    logging.info("log debug################    ")
+
+    #verify_response(response, token)
+
     return {" this page is web service; add /docs to see the api"}
 
-@app.get(
-    "/", response_description="List all students", response_model=List[StudentModel]
-)
-async def list_students():
-    students = await db["students"].find().to_list(1000)
-    return students
-
 
 @app.get(
-    "/{id}", response_description="Get a single student", response_model=StudentModel
+    "/genz", response_description="List all genz collection", response_model=List[Genz]
 )
-async def show_student(id: str):
-    if (student := await db["students"].find_one({"_id": id})) is not None:
-        return student
+async def list_genz(response: Response, engine=Depends(get_engine), offset: int = 0, limit: int = Query(default=10, lte=1000),
+                    current_uer: User = Depends(get_current_user)):
+    #verify_response(response, token)
 
-    raise HTTPException(status_code=404, detail=f"Student {id} not found")
-
-
-@app.put("/{id}", response_description="Update a student", response_model=StudentModel)
-async def update_student(id: str, student: UpdateStudentModel = Body(...)):
-    student = {k: v for k, v in student.dict().items() if v is not None}
-
-    if len(student) >= 1:
-        update_result = await db["students"].update_one({"_id": id}, {"$set": student})
-
-        if update_result.modified_count == 1:
-            if (
-                updated_student := await db["students"].find_one({"_id": id})
-            ) is not None:
-                return updated_student
-
-    if (existing_student := await db["students"].find_one({"_id": id})) is not None:
-        return existing_student
-
-    raise HTTPException(status_code=404, detail=f"Student {id} not found")
+    genz = await engine.find(Genz, Genz.id > offset, Genz.id < limit)
+    return genz
 
 
-@app.delete("/{id}", response_description="Delete a student")
-async def delete_student(id: str):
-    delete_result = await db["students"].delete_one({"_id": id})
+@app.get(
+    "/young", response_description="List all young collection", response_model=List[Young]
+)
+async def list_young(response: Response, engine=Depends(get_engine), offset: int = 0, limit: int = Query(default=10, lte=70),
+                     current_uer: User = Depends(get_current_user)):
+    #verify_response(response, token)
 
-    if delete_result.deleted_count == 1:
-        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT)
+    young = await engine.find(Young, Young.id > offset, Young.id < limit)
+    return young
 
-    raise HTTPException(status_code=404, detail=f"Student {id} not found")
+
+@app.get(
+    "/genz/{id}", response_description="Get a single genz", response_model=Genz)
+async def show_genz(id: int, response: Response, engine=Depends(get_engine), current_uer: User = Depends(get_current_user)):
+    #verify_response(response, token)
+
+    if (genz := await engine.find_one(Genz, Genz.id == id)) is not None:
+        return genz
+
+    raise HTTPException(status_code=404, detail=f"Genz {id} not found")
+
+
+@app.get(
+    "/young/{id}", response_description="Get a single young", response_model=Young)
+async def show_young(id: int, response: Response, engine=Depends(get_engine), current_uer: User = Depends(get_current_user)):
+    # verify_response(response, token)
+
+    if (young := await engine.find_one(Young, Young.id == id)) is not None:
+        return young
+
+    raise HTTPException(status_code=404, detail=f"Young {id} not found")
+
+
+# def verify_response(response: Response, token: str = Depends(token_auth_scheme)):
+#     """A valid access token is required to access this route"""
+
+#     result = VerifyToken(token.credentials).verify()
+
+#     if result.get("status"):
+#         response.status_code = status.HTTP_400_BAD_REQUEST
+#         return result
+
+#     getlog().debug(result)
