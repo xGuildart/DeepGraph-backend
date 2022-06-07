@@ -1,22 +1,15 @@
-import email
-import imp
 import os
 import rsa
 
 from datetime import timedelta
-from typing import Optional
-from email.policy import default
-from textwrap import indent
-from unittest import skip
 from black import logging
 from fastapi import FastAPI, Body, HTTPException, status, Query, Depends, Response
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from fastapi.security import HTTPBearer, OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from typing import Optional, List
 from logger.log import logging
-from odmantic import AIOEngine, ObjectId, query
-from cryptography.fernet import Fernet
+from odmantic import AIOEngine, query
 
 from app.db import get_engine
 from app.models import Genz, Young, User
