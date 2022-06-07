@@ -9,9 +9,5 @@ DATABASE_URL = os.environ["MONGODB_URL"]
 client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URL)
 
 
-# # def get_db():
-# #     db = client['deeplabs']
-# #     yield db
-
 def get_engine():
     return AIOEngine(motor_client=client, database="deeplabs")

@@ -1,6 +1,15 @@
+import email
+from email.policy import default
+from faulthandler import disable
+from xmlrpc.client import Boolean
+import json_util
+from bson.json_util import loads, dumps
 from odmantic import AIOEngine, Model, ObjectId, Field
-from bson import ObjectId
+from bson import ObjectId, Binary
 from typing import List, Generic
+from pydantic import StrictBool
+
+from sqlalchemy import false
 
 
 class PyObjectId(ObjectId):
@@ -86,5 +95,36 @@ class Young(Model):
                     "3": 0.45195660504396074,
                     "5": 0.12931239925674165
                 }
+            }
+        }
+
+
+class User(Model):
+    id: ObjectId = Field(key_name="_id", primary_field=True,
+                         default_factory=PyObjectId)
+    username: str = Field(...)
+    password: Binary = Field(...)
+    email: str = Field(...)
+    disabled: bool = Field(default=False)
+
+    def to_dict(__self__):
+        return {
+            "_id": str(__self__.id),
+            "username": __self__.username,
+            "password": dumps(__self__.password),
+            "email": __self__.email,
+            "disabled": __self__.disabled
+        }
+
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+        schema_extra = {
+            "example":
+            {
+                "username": "user",
+                "password": 'hashedpassword',
+                "email": "pass@user",
+                "disabled": False
             }
         }

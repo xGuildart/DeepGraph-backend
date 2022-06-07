@@ -28,3 +28,6 @@ uvicorn==0.15.0
 odmantic
 pyjwt
 python-multipart
+rsa
+json_util
+python-jose

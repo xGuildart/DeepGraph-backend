@@ -1,23 +1,71 @@
-from fastapi import Depends
+import os
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from odmantic import AIOEngine
+from datetime import datetime, timedelta
 from pydantic import BaseModel
+from app.db import get_engine
+from app.models import User
+from jose import JWTError, jwt
+
+SECRET_KEY = os.environ["SECRET_KEY"]
+ALGORITHM = "HS256"
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="tokens")
 
 
-class User(BaseModel):
-    username: str
-    password: str | None = None
-    disabled: bool | None = None
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 
-def fake_decode_token(token):
-    return User(
-        username=token + "fakedecoded", password="password"
-    )
+class TokenData(BaseModel):
+    username: str | None = None
+
+
+class UserInDB(User):
+    password: str
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def get_user(token: str, engine: AIOEngine = get_engine()):
+    user = await engine.find_one(User, User.username == token)
+    if user is not None:
+        return UserInDB(**user.to_dict())
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    user = fake_decode_token(token)
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user = await get_user(token_data)
+    if user is None:
+        raise credentials_exception
     return user
+
+
+async def get_current_active_user(current_user: User = Depends(get_current_user)):
+    if current_user.disabled:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user

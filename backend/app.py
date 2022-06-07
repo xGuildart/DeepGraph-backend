@@ -1,6 +1,9 @@
+import email
+import imp
 import os
+import rsa
 
-from ast import For
+from datetime import timedelta
 from typing import Optional
 from email.policy import default
 from textwrap import indent
@@ -9,28 +12,73 @@ from black import logging
 from fastapi import FastAPI, Body, HTTPException, status, Query, Depends, Response
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from fastapi.security import HTTPBearer, OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional, List
 from logger.log import logging
-from odmantic import ObjectId
+from odmantic import AIOEngine, ObjectId, query
+from cryptography.fernet import Fernet
 
 from app.db import get_engine
-from app.models import Genz, Young
-from app.oath2 import get_current_user, User
+from app.models import Genz, Young, User
+from app.oath2 import get_current_user, get_current_active_user, create_access_token, Token
+from app.utils import string_to_key
+
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 app = FastAPI()
 
+private_key: rsa.PrivateKey = string_to_key(
+    os.environ["private_key"], "private")
+public_key: rsa.PublicKey = string_to_key(os.environ["public_key"], "pub")
 
-logging.info("log debug################    ")
+print(public_key)
+pp = rsa.encrypt("pdsdsss".encode(), public_key)
+print(pp)
+dpp = rsa.decrypt(pp, private_key)
+print(dpp)
 
 
 @app.get("/")
 async def home(current_uer: User = Depends(get_current_user)):
     logging.info("log debug################    ")
-
-    #verify_response(response, token)
-
     return {" this page is web service; add /docs to see the api"}
+
+
+async def authenticate_user(form_data: OAuth2PasswordRequestForm, engine=Depends(get_engine)):
+    user = await engine.find_one(User, User.username == form_data.username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    password = form_data.password
+    dbpass = rsa.decrypt(user.password, private_key).decode('ascii')
+    if not password == dbpass:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
+
+
+@app.post("/tokens", response_model=Token)
+async def login_for_access_token(engine=Depends(get_engine), form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await authenticate_user(form_data, engine=engine)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get(
@@ -77,13 +125,29 @@ async def show_young(id: int, response: Response, engine=Depends(get_engine), cu
     raise HTTPException(status_code=404, detail=f"Young {id} not found")
 
 
-# def verify_response(response: Response, token: str = Depends(token_auth_scheme)):
-#     """A valid access token is required to access this route"""
+@app.post("/user", response_description="Add new User", response_model=User)
+async def create_user(user: User = Body(...), engine: AIOEngine = Depends(get_engine)):
+    user = jsonable_encoder(user)
 
-#     result = VerifyToken(token.credentials).verify()
+    # check username and email unicity
+    unicity = query.or_(
+        User.username == user["username"], User.email == user["email"])
+    user_db = await engine.find_one(User, unicity)
+    if user_db is not None:
+        raise HTTPException(
+            status_code=status.HTTP_226_IM_USED,
+            detail="Username or email already used!")
+    else:
 
-#     if result.get("status"):
-#         response.status_code = status.HTTP_400_BAD_REQUEST
-#         return result
+        passw = rsa.encrypt(user['password'].encode(), public_key)
+        user = User(username=user['username'],
+                    password=passw, email=user['email'])
+        new_user = await engine.save(user)
+        created_user = await engine.find_one(User, User.id == new_user.id)
+        JSONResponse(status_code=status.HTTP_201_CREATED,
+                     content=created_user.to_dict())
 
-#     getlog().debug(result)
+
+@app.get("/users/me")
+async def read_users_me(current_user: User = Depends(get_current_active_user)):
+    return current_user
