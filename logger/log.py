@@ -9,3 +9,14 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
+
+
+# the __name__ resolve to "uicheckapp.services"
+logger = logging.getLogger(__name__)
+# This will load the uicheckapp logger
+
+
+class EchoService:
+    def echo(self, msg):
+        logger.info("echoing something from the uicheckapp logger")
+        print(msg)

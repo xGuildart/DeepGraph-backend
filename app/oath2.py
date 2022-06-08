@@ -1,4 +1,5 @@
 import os
+import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from odmantic import AIOEngine
@@ -7,12 +8,22 @@ from pydantic import BaseModel
 from app.db import get_engine
 from app.models import User
 from jose import JWTError, jwt
+from logger.log import EchoService
 
 SECRET_KEY = os.environ["SECRET_KEY"]
 ALGORITHM = "HS256"
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="tokens")
+
+
+# setup loggers
+logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
+
+# get root logger
+# the __name__ resolve to "main" since we are at the root of the project.
+logger = logging.getLogger(__name__)
+# This will get the root logger since no logger in the configuration has this name.
 
 
 class Token(BaseModel):
@@ -51,15 +62,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
+        print('token:::::::::::::: ' + token)
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        print('username:' + username)
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    user = await get_user(token_data)
+    user = await get_user(token_data.username)
     if user is None:
         raise credentials_exception
     return user
