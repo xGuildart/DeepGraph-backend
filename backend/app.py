@@ -60,10 +60,10 @@ async def authenticate_user(form_data: OAuth2PasswordRequestForm, engine=Depends
 
     password = form_data.password
     dbpass = rsa.decrypt(user.password, private_key).decode('ascii')
-    if not password == dbpass:
+    if not (password == dbpass and user.permission == "admin"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect username or password, or no privileged user",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

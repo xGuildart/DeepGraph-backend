@@ -96,6 +96,7 @@ class User(Model):
     username: str = Field(...)
     password: Binary = Field(...)
     email: str = Field(...)
+    permission: str = Field(default="normal")
     disabled: bool = Field(default=False)
 
     def to_dict(__self__):
@@ -104,6 +105,7 @@ class User(Model):
             "username": __self__.username,
             "password": dumps(__self__.password),
             "email": __self__.email,
+            "permission": __self__.permission,
             "disabled": __self__.disabled
         }
 
@@ -116,6 +118,5 @@ class User(Model):
                 "username": "user",
                 "password": 'hashedpassword',
                 "email": "pass@user",
-                "disabled": False
             }
         }
