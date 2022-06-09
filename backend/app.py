@@ -1,9 +1,8 @@
 import os
 import rsa
-
 from datetime import timedelta
 from black import logging
-from fastapi import FastAPI, Body, HTTPException, status, Query, Depends, Response
+from fastapi import FastAPI, Body, HTTPException, status, Query, Depends, Response, Request
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordRequestForm
@@ -11,20 +10,31 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List
 from logger.log import logging
 from odmantic import AIOEngine, query
-
+from bson import Binary
 from app.db import get_engine
-from app.models import Genz, Young, User
+from app.models import Genz, User_ch, Young, User
 from app.oath2 import get_current_user, get_current_active_user, create_access_token, Token
 from app.utils import string_to_key
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+DEBUG = os.environ['DEBUG']
 
 app = FastAPI()
 
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "*"
 ]
+
+if(DEBUG):
+    hosts = [
+        "localhost",
+        "127.0.0.1"
+    ]
+else:
+    hosts = []
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,28 +49,45 @@ private_key: rsa.PrivateKey = string_to_key(
     os.environ["private_key"], "private")
 public_key: rsa.PublicKey = string_to_key(os.environ["public_key"], "pub")
 
-pem = private_key.save_pkcs1("PEM")
-print(pem)
-
 
 @app.get("/")
 async def home(current_uer: User = Depends(get_current_user)):
     logging.info("log debug################    ")
-    return {" this page is web service; add /docs to see the api"}
+    return {" this page is a web service; add /docs to see the api"}
 
 
-async def authenticate_user(form_data: OAuth2PasswordRequestForm, engine=Depends(get_engine)):
-    user = await engine.find_one(User, User.username == form_data.username)
+async def authenticate_user(form_data: OAuth2PasswordRequestForm, request: Request, engine=Depends(get_engine)):
+    cred = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect username or password",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if form_data.client_secret == "*secret*":
+        client_host = request.client.host
+        if(client_host in hosts):
+            if(form_data.password == "*password*" and form_data.username == "*user*"):
+                fuser = os.environ['APP_USER']
+                fpswd = os.environ['APP_PSWD']
+            else:
+                raise cred
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Client not allowed",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    else:
+        fuser = form_data.username
+        fpswd = form_data.password
+
+    user = await engine.find_one(User, User.username == fuser)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise cred
 
-    password = form_data.password
     dbpass = rsa.decrypt(user.password, private_key).decode('ascii')
-    if not (password == dbpass and user.permission == "admin"):
+    if not (fpswd == dbpass and user.permission == "admin"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password, or no privileged user",
@@ -70,9 +97,9 @@ async def authenticate_user(form_data: OAuth2PasswordRequestForm, engine=Depends
     return user
 
 
-@app.post("/tokens", response_model=Token)
-async def login_for_access_token(engine=Depends(get_engine), form_data: OAuth2PasswordRequestForm = Depends()):
-    user = await authenticate_user(form_data, engine=engine)
+@ app.post("/tokens", response_model=Token)
+async def login_for_access_token(request: Request, engine=Depends(get_engine), form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await authenticate_user(form_data, request, engine=engine)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -86,7 +113,7 @@ async def login_for_access_token(engine=Depends(get_engine), form_data: OAuth2Pa
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.get(
+@ app.get(
     "/genz", response_description="List all genz collection", response_model=List[Genz]
 )
 async def list_genz(response: Response, engine=Depends(get_engine), offset: int = 0, limit: int = Query(default=10, lte=1000),
@@ -96,7 +123,7 @@ async def list_genz(response: Response, engine=Depends(get_engine), offset: int 
     return genz
 
 
-@app.get(
+@ app.get(
     "/young", response_description="List all young collection", response_model=List[Young]
 )
 async def list_young(response: Response, engine=Depends(get_engine), offset: int = 0, limit: int = Query(default=10, lte=70),
@@ -106,7 +133,7 @@ async def list_young(response: Response, engine=Depends(get_engine), offset: int
     return young
 
 
-@app.get(
+@ app.get(
     "/genz/{id}", response_description="Get a single genz", response_model=Genz)
 async def show_genz(id: int, response: Response, engine=Depends(get_engine), current_uer: User = Depends(get_current_user)):
 
@@ -116,7 +143,7 @@ async def show_genz(id: int, response: Response, engine=Depends(get_engine), cur
     raise HTTPException(status_code=404, detail=f"Genz {id} not found")
 
 
-@app.get(
+@ app.get(
     "/young/{id}", response_description="Get a single young", response_model=Young)
 async def show_young(id: int, response: Response, engine=Depends(get_engine), current_uer: User = Depends(get_current_user)):
 
@@ -126,7 +153,7 @@ async def show_young(id: int, response: Response, engine=Depends(get_engine), cu
     raise HTTPException(status_code=404, detail=f"Young {id} not found")
 
 
-@app.post("/user", response_description="Add new User", response_model=User)
+@ app.post("/user", response_description="Add new User", response_model=User)
 async def create_user(user: User = Body(...), engine: AIOEngine = Depends(get_engine), current_user: User = Depends(get_current_user)):
     user = jsonable_encoder(user)
 
@@ -140,34 +167,37 @@ async def create_user(user: User = Body(...), engine: AIOEngine = Depends(get_en
             detail="Username or email already used!")
     else:
 
-        #passw = rsa.encrypt(user['password'].encode(), public_key)
+        passw = rsa.encrypt(user['password'].encode(), public_key)
         user = User(username=user['username'],
-                    password=user['password'], email=user['email'])
+                    password=passw, email=user['email'])
         new_user = await engine.save(user)
         created_user = await engine.find_one(User, User.id == new_user.id)
         JSONResponse(status_code=status.HTTP_201_CREATED,
                      content=created_user.to_dict())
 
 
-@app.get(
+@ app.post(
     "/checkUser", response_description="Sign In", response_model=User)
-async def check_user(user: User = Body(...), engine=Depends(get_engine), current_uer: User = Depends(get_current_user)):
+async def check_user(user: User_ch = Body(...), engine=Depends(get_engine), current_uer: User = Depends(get_current_user)):
     user = jsonable_encoder(user)
 
     credentials = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail=f"Username or password or both are incorrect!")
 
-    if (dbuser := await engine.find_one(User, User.username == user['username'])) is not None:
+    qUser = query.or_(
+        User.username == user["identifier"], User.email == user["identifier"])
+    if (dbuser := await engine.find_one(User, qUser)) is not None:
+        print(dbuser.password)
         dbpass = rsa.decrypt(dbuser.password, private_key).decode('ascii')
         if dbpass == user['password']:
-            JSONResponse(status_code=status.HTTP_202_ACCEPTED,
-                         content={"data": True})
-
+            return JSONResponse(status_code=status.HTTP_202_ACCEPTED,
+                                content=True)
+        else:
+            raise credentials
+    else:
         raise credentials
 
-    raise credentials
 
-
-@app.get("/users/me")
+@ app.get("/users/me")
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
     return current_user
