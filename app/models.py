@@ -106,7 +106,7 @@ class User(Model):
             "password": dumps(__self__.password),
             "email": __self__.email,
             "permission": __self__.permission,
-            "disabled": __self__.disabled
+            "disabled": __self__.disabled,
         }
 
     class Config:
@@ -120,3 +120,8 @@ class User(Model):
                 "email": "pass@user",
             }
         }
+
+
+class User_ch(Model):
+    identifier: str
+    password: str
