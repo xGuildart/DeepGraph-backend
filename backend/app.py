@@ -67,7 +67,7 @@ async def authenticate_user(form_data: OAuth2PasswordRequestForm, request: Reque
 
     if form_data.client_secret == "*secret*":
         client_host = request.client.host
-        if(client_host in hosts):
+        if(True):  # (TODO: Re-enforce this part so only our client, can do request) we didn't check if client.host in hosts because, apparently client_host is the ip and not frontend ip so , it can be anything
             if(form_data.password == "*password*" and form_data.username == "*user*"):
                 fuser = os.environ['APP_USER']
                 fpswd = os.environ['APP_PSWD']
