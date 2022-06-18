@@ -34,7 +34,8 @@ if(DEBUG):
         "127.0.0.1"
     ]
 else:
-    hosts = ["https://deep-graph.herokuapp.com"]
+    hosts = ["https://deep-graph.herokuapp.com",
+             "*"]
 
 
 app.add_middleware(
@@ -66,7 +67,7 @@ async def authenticate_user(form_data: OAuth2PasswordRequestForm, request: Reque
 
     if form_data.client_secret == "*secret*":
         client_host = request.client.host
-        if(client_host in hosts):
+        if(client_host in hosts or "*" in hosts):  # I can't have the real IP, because heroku doesn't afford ip:port by app, so i let every host (even if it's not related frontend (free)); for private communication, it will be necessery to have the exact domain for more security
             if(form_data.password == "*password*" and form_data.username == "*user*"):
                 fuser = os.environ['APP_USER']
                 fpswd = os.environ['APP_PSWD']
