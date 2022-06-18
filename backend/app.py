@@ -35,7 +35,7 @@ if(DEBUG):
         "127.0.0.1"
     ]
 else:
-    hosts = ["deep-graph.herokuapp.com", "deep-graph-back.herokuapp.com"]
+    hosts = ["197.253.237.89"]
 
 
 app.add_middleware(
