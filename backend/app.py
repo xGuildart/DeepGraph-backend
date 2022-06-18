@@ -24,7 +24,8 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:3000",
-    "*"
+    "*",
+    "https://deep-graph-back.herokuapp.com"
 ]
 
 if(DEBUG):
@@ -33,7 +34,7 @@ if(DEBUG):
         "127.0.0.1"
     ]
 else:
-    hosts = []
+    hosts = ["https://deep-graph-back.herokuapp.com"]
 
 
 app.add_middleware(
