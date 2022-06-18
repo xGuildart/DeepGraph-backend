@@ -76,7 +76,7 @@ async def authenticate_user(form_data: OAuth2PasswordRequestForm, request: Reque
         else:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Client not allowed",
+                detail="Unknown host: " + client_host,
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
