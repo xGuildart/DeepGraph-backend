@@ -25,7 +25,7 @@ origins = [
     "http://localhost",
     "http://localhost:3000",
     "*",
-    "https://deep-graph-back.herokuapp.com"
+    "https://deep-graph.herokuapp.com"
 ]
 
 if(DEBUG):
@@ -34,7 +34,7 @@ if(DEBUG):
         "127.0.0.1"
     ]
 else:
-    hosts = ["https://deep-graph-back.herokuapp.com"]
+    hosts = ["https://deep-graph.herokuapp.com"]
 
 
 app.add_middleware(
