@@ -12,7 +12,7 @@ from logger.log import logging
 from odmantic import AIOEngine, query
 from bson import Binary
 from app.db import get_engine
-from app.models import Genz, User_ch, Young, User
+from app.models import Genz, User_ch, UserUpdate, Young, User, User_up
 from app.oath2 import get_current_user, get_current_active_user, create_access_token, Token
 from app.utils import string_to_key
 
@@ -119,7 +119,7 @@ async def login_for_access_token(request: Request, engine=Depends(get_engine), f
 async def list_genz(response: Response, engine=Depends(get_engine), offset: int = 0, limit: int = Query(default=10, lte=1000),
                     current_uer: User = Depends(get_current_user)):
 
-    genz = await engine.find(Genz, Genz.id > offset, Genz.id < limit)
+    genz = await engine.find(Genz, Genz.id >= offset, Genz.id < limit)
     return genz
 
 
@@ -129,7 +129,7 @@ async def list_genz(response: Response, engine=Depends(get_engine), offset: int 
 async def list_young(response: Response, engine=Depends(get_engine), offset: int = 0, limit: int = Query(default=10, lte=70),
                      current_uer: User = Depends(get_current_user)):
 
-    young = await engine.find(Young, Young.id > offset, Young.id < limit)
+    young = await engine.find(Young, Young.id >= offset, Young.id < limit)
     return young
 
 
@@ -172,13 +172,34 @@ async def create_user(user: User = Body(...), engine: AIOEngine = Depends(get_en
                     password=passw, email=user['email'])
         new_user = await engine.save(user)
         created_user = await engine.find_one(User, User.id == new_user.id)
-        JSONResponse(status_code=status.HTTP_201_CREATED,
-                     content=created_user.to_dict())
+        return JSONResponse(status_code=status.HTTP_201_CREATED,
+                            content=created_user.to_dict())
+
+
+@ app.patch("/users/{name}", response_model=User_up)
+async def update_user_by_name(name: str, engine: AIOEngine = Depends(get_engine), current_user:  User = Depends(get_current_user)):
+    queryUser = query.or_(User.username == name, User.email == name)
+    user = await engine.find_one(User, queryUser)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Username Not found! update failed")
+    else:
+        if user.limit:
+            patchUser = UserUpdate()
+            patchUser.connection = user.connection + 1
+            user.update(patchUser)
+            await engine.save(user)
+            return JSONResponse(status_code=status.HTTP_200_OK,
+                                content={"identifier": user.username, "con": user.connection})
+        else:
+            return JSONResponse(status_code=status.HTTP_200_OK,
+                                content={"identifier": "VIP", "con": 0})
 
 
 @ app.post(
     "/checkUser", response_description="Sign In", response_model=User)
-async def check_user(user: User_ch = Body(...), engine=Depends(get_engine), current_uer: User = Depends(get_current_user)):
+async def check_user(user: User_ch = Body(...), engine=Depends(get_engine), current_user: User = Depends(get_current_user)):
     user = jsonable_encoder(user)
 
     credentials = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,

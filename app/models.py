@@ -1,6 +1,8 @@
+from xml.dom.minidom import Identified
 from bson.json_util import dumps
 from odmantic import Model, ObjectId, Field
 from bson import ObjectId, Binary
+from pydantic import BaseModel
 
 
 class PyObjectId(ObjectId):
@@ -98,6 +100,8 @@ class User(Model):
     email: str = Field(...)
     permission: str = Field(default="normal")
     disabled: bool = Field(default=False)
+    limit: bool = Field(default=True)
+    connection: int = Field(default=0)
 
     def to_dict(__self__):
         return {
@@ -107,6 +111,8 @@ class User(Model):
             "email": __self__.email,
             "permission": __self__.permission,
             "disabled": __self__.disabled,
+            "limit": __self__.limit,
+            "connection": __self__.connection,
         }
 
     class Config:
@@ -122,6 +128,21 @@ class User(Model):
         }
 
 
+class UserUpdate(BaseModel):
+    username: str = None
+    password: Binary = None
+    email: str = None
+    permission: str = None
+    disabled: bool = None
+    limit: bool = None
+    connection: int = 0
+
+
 class User_ch(Model):
     identifier: str
     password: str
+
+
+class User_up(Model):
+    Identifier: str
+    con: int
